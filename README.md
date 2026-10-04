@@ -14,11 +14,8 @@ A rate-limiting API built with Spring Boot that backend services can register wi
 - [The Multi-Instance Bug (and Fix)](#the-multi-instance-bug-and-fix)
 - [API Reference](#api-reference)
 - [Data Model](#data-model)
-- [Running Locally](#running-locally)
 - [Testing](#testing)
 - [Design Decisions & Trade-offs](#design-decisions--trade-offs)
-- [What I'd Do Differently / Known Limitations](#what-id-do-differently--known-limitations)
-- [Roadmap](#roadmap)
 - [Tech Stack](#tech-stack)
 
 ---
@@ -187,34 +184,18 @@ BackendService (1) ──< (many) EndpointConfig
 
 Unregistered routes all share **one** default bucket per company — deliberately, to prevent a client from bypassing limits by hitting arbitrarily many distinct, unregistered paths.
 
-## Running Locally
 
-```bash
-# 1. Start infrastructure
-docker compose up -d postgres redis
 
-# 2. Configure (application.properties)
-spring.datasource.url=jdbc:postgresql://localhost:5432/ratelimitingdb
-spring.data.redis.host=localhost
-ratelimiter.storage=memory   # or redis
 
-# 3. Run
-mvn spring-boot:run
-```
-
-See `/scripts` for curl-based test scripts covering registration, draining a bucket, pattern matching, and the multi-instance demo.
 
 ## Testing
 
 - Unit tests for all 3 algorithms (in-memory), with deterministic time injection
-- Unit tests for Redis-backed variants using Testcontainers (real, ephemeral Redis per test run)
 - Concurrency test: 50 simultaneous requests against a shared bucket, asserting exactly the configured limit succeeds
 - End-to-end manual verification via curl scripts for the full registration → override → check flow
 - Multi-instance demonstration (above)
 
-```bash
-mvn test
-```
+
 
 ## Design Decisions & Trade-offs
 
@@ -224,17 +205,6 @@ mvn test
 - **Sliding Window Log trades memory for exactness**, Sliding Window Counter trades a small accuracy approximation for O(1) memory, Token Bucket allows controlled bursts. All three are legitimate choices depending on the endpoint's traffic pattern — this is why all three exist rather than picking "the best one."
 - **SHA-256, not bcrypt, for API key hashing** — bcrypt's deliberate slowness is designed to defend against brute-forcing low-entropy human passwords; API keys are high-entropy random values hashed on every request, where bcrypt's cost becomes a pure performance tax with no corresponding security benefit.
 
-## What I'd Do Differently / Known Limitations
-
-- `/register` is currently unauthenticated — a production version would add rate limiting or verification on registration itself to prevent abuse.
-- Overlapping registered patterns (e.g. `/books/{id}` and `/books/{author}`) are undefined behavior — Ant-style matching has no type constraints to disambiguate them.
-- No automated migration tooling (Flyway) yet — schema currently relies on `ddl-auto=update`.
-
-## Roadmap
-
-- [ ] Load balancer (separate project) calling into this service — round robin, least connections, consistent hashing
-- [ ] Custom LSM-tree storage engine as an alternative backend
-- [ ] Flyway migrations
 
 ## Tech Stack
 
